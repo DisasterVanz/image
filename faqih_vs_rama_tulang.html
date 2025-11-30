@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Faqih vs Rama (Lempar Tulang)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #222;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #fff;
+    }
+    .wrapper {
+      text-align: center;
+    }
+    canvas {
+      border: 2px solid #fff;
+      border-radius: 10px;
+      background: linear-gradient(#87ceeb, #ffffff);
+      display: block;
+      margin: 0 auto 10px;
+    }
+    .info {
+      font-size: 14px;
+      opacity: 0.9;
+      line-height: 1.4;
+    }
+    .info span.key {
+      padding: 2px 4px;
+      border-radius: 3px;
+      border: 1px solid #aaa;
+      font-size: 12px;
+      background: rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div class="info">
+      <p>🎮 Kontrol (giliran bergantian): 
+        <span class="key">↑</span>/<span class="key">↓</span> = sudut,
+        <span class="key">←</span>/<span class="key">→</span> = kekuatan,
+        <span class="key">Space</span> = lempar tulang 🦴
+      </p>
+      <p>🔁 Tekan <span class="key">R</span> setelah game selesai untuk main lagi.</p>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const GROUND_Y = 340;
+    const GRAVITY = 0.35;
+    const PROJECTILE_RADIUS = 7;
+
+    const players = [
+      {
+        name: "FAQIH",
+        x: 80,
+        width: 40,
+        height: 60,
+        color: "#3498db",
+        health: 3,
+        angle: 45,
+        power: 16
+      },
+      {
+        name: "RAMA",
+        x: canvas.width - 120,
+        width: 40,
+        height: 60,
+        color: "#e74c3c",
+        health: 3,
+        angle: 135,
+        power: 16
+      }
+    ];
+
+    let currentPlayer = 0;        // 0 = Faqih, 1 = Rama
+    let projectile = null;        // {x, y, vx, vy, active}
+    let gameOver = false;
+    let wind = 0;                 // percepatan angin di sumbu x
+    let lastTime = 0;
+
+    function randomWind() {
+      // angin kecil-kecilan biar seru (-0.05 s/d 0.05)
+      wind = (Math.random() * 0.1) - 0.05;
+    }
+
+    function resetGame() {
+      players[0].health = 3;
+      players[1].health = 3;
+      players[0].angle = 45;
+      players[0].power = 16;
+      players[1].angle = 135;
+      players[1].power = 16;
+      currentPlayer = 0;
+      projectile = null;
+      gameOver = false;
+      randomWind();
+    }
+
+    function startShot() {
+      if (gameOver || projectile) return;
+
+      const p = players[currentPlayer];
+      const angleDeg = p.angle;
+      const angleRad = angleDeg * Math.PI / 180;
+
+      // Titik awal peluru (dari atas badan karakter)
+      const startX = currentPlayer === 0
+        ? p.x + p.width
+        : p.x;
+      const startY = GROUND_Y - p.height + 10;
+
+      const speed = p.power;
+      const dir = currentPlayer === 0 ? 1 : -1;
+
+      projectile = {
+        x: startX,
+        y: startY,
+        vx: speed * Math.cos(angleRad) * dir,
+        vy: -speed * Math.sin(angleRad),
+        active: true
+      };
+    }
+
+    function switchTurn() {
+      currentPlayer = currentPlayer === 0 ? 1 : 0;
+      randomWind();
+    }
+
+    function updateProjectile(delta) {
+      if (!projectile || !projectile.active) return;
+
+      projectile.vx += wind;
+      projectile.vy += GRAVITY;
+
+      projectile.x += projectile.vx;
+      projectile.y += projectile.vy;
+
+      if (projectile.y >= GROUND_Y || projectile.x < 0 || projectile.x > canvas.width) {
+        projectile.active = false;
+        projectile = null;
+        if (!gameOver) switchTurn();
+        return;
+      }
+
+      const targetIndex = currentPlayer === 0 ? 1 : 0;
+      const target = players[targetIndex];
+
+      if (
+        projectile.x + PROJECTILE_RADIUS > target.x &&
+        projectile.x - PROJECTILE_RADIUS < target.x + target.width &&
+        projectile.y + PROJECTILE_RADIUS > GROUND_Y - target.height &&
+        projectile.y - PROJECTILE_RADIUS < GROUND_Y
+      ) {
+        target.health -= 1;
+        projectile.active = false;
+        projectile = null;
+
+        if (target.health <= 0) {
+          gameOver = true;
+        } else {
+          switchTurn();
+        }
+      }
+    }
+
+    function drawBackground() {
+      ctx.fillStyle = "#8d6e63";
+      ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+
+      ctx.fillStyle = "#2ecc71";
+      ctx.fillRect(0, GROUND_Y - 10, canvas.width, 10);
+    }
+
+    function drawPlayer(p, isCurrent) {
+      // badan
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, GROUND_Y - p.height, p.width, p.height);
+
+      // kepala
+      ctx.fillStyle = "#f5f5f5";
+      ctx.fillRect(p.x + 5, GROUND_Y - p.height - 20, p.width - 10, 20);
+
+      // nama
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "14px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(
+        p.name,
+        p.x + p.width / 2,
+        GROUND_Y - p.height - 28
+      );
+
+      // HP (hati)
+      let hearts = "";
+      for (let i = 0; i < p.health; i++) hearts += "❤";
+      ctx.font = "16px Arial";
+      ctx.fillText(
+        hearts,
+        p.x + p.width / 2,
+        GROUND_Y - p.height - 10
+      );
+
+      if (isCurrent && !gameOver) {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(p.x - 4, GROUND_Y - p.height - 24, p.width + 8, p.height + 28);
+      }
+    }
+
+    function drawBone(x, y) {
+      // gambar tulang kecil (2 lingkaran + persegi panjang)
+      const len = 24;
+      const half = len / 2;
+      const r = PROJECTILE_RADIUS;
+
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 1.2;
+
+      // batang
+      ctx.beginPath();
+      ctx.rect(x - half, y - r / 1.5, len, r * (2/1.5));
+      ctx.fill();
+      ctx.stroke();
+
+      // ujung kiri
+      ctx.beginPath();
+      ctx.arc(x - half, y - r / 2, r, 0, Math.PI * 2);
+      ctx.arc(x - half, y + r / 2, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // ujung kanan
+      ctx.beginPath();
+      ctx.arc(x + half, y - r / 2, r, 0, Math.PI * 2);
+      ctx.arc(x + half, y + r / 2, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    function drawProjectile() {
+      if (!projectile || !projectile.active) return;
+      drawBone(projectile.x, projectile.y);
+    }
+
+    function drawHUD() {
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffffff";
+
+      ctx.font = "18px Arial";
+      let turnText = "";
+      if (!gameOver) {
+        turnText = `Giliran: ${players[currentPlayer].name} (lempar tulang 🦴)`;
+      } else {
+        const winner = players[currentPlayer].health > 0
+          ? players[currentPlayer].name
+          : players[currentPlayer === 0 ? 1 : 0].name;
+        turnText = `GAME OVER - ${winner} MENANG! (tekan R untuk restart)`;
+      }
+      ctx.fillText(turnText, canvas.width / 2, 24);
+
+      const p = players[currentPlayer];
+      ctx.font = "16px Arial";
+      ctx.fillText(
+        `Sudut: ${p.angle.toFixed(0)}°  |  Kekuatan: ${p.power.toFixed(0)}`,
+        canvas.width / 2,
+        48
+      );
+
+      ctx.font = "14px Arial";
+      let windText = "";
+      if (wind > 0.01) windText = `Angin → (${wind.toFixed(2)})`;
+      else if (wind < -0.01) windText = `Angin ← (${wind.toFixed(2)})`;
+      else windText = `Angin: tenang`;
+
+      ctx.fillText(windText, canvas.width / 2, 70);
+    }
+
+    function gameLoop(timestamp) {
+      const delta = timestamp - lastTime;
+      lastTime = timestamp;
+
+      updateProjectile(delta);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBackground();
+      drawPlayer(players[0], currentPlayer === 0);
+      drawPlayer(players[1], currentPlayer === 1);
+      drawProjectile();
+      drawHUD();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    document.addEventListener("keydown", (e) => {
+      const p = players[currentPlayer];
+
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        startShot();
+        return;
+      }
+
+      if (e.key === "r" || e.key === "R") {
+        if (gameOver) resetGame();
+        return;
+      }
+
+      if (projectile && projectile.active) return;
+      if (gameOver) return;
+
+      const angleStep = 2;
+      const powerStep = 1;
+
+      switch (e.key) {
+        case "ArrowUp":
+          if (currentPlayer === 0) {
+            p.angle = Math.min(80, p.angle + angleStep);
+          } else {
+            p.angle = Math.min(170, p.angle + angleStep);
+          }
+          break;
+        case "ArrowDown":
+          if (currentPlayer === 0) {
+            p.angle = Math.max(10, p.angle - angleStep);
+          } else {
+            p.angle = Math.max(100, p.angle - angleStep);
+          }
+          break;
+        case "ArrowRight":
+          p.power = Math.min(25, p.power + powerStep);
+          break;
+        case "ArrowLeft":
+          p.power = Math.max(8, p.power - powerStep);
+          break;
+      }
+    });
+
+    resetGame();
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
